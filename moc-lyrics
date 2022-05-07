@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 
-function moc_test (){
+# credits:
+# hakerdefo for the original script (https://github.com/hakerdefo/moc-lyrics)
+# urlencode function from (https://stackoverflow.com/a/10660730/912236)
+#
+# - removed perl requirements to use bash urlencode() instead
+# - switched from stty size to tput cols for separator
+# - some small cosmetic changes
+# - write moc compatible lyric files alongside music files
+#
+# todo: use local lyric files if already downloaded
 
+moc_test() {
     if ! type mocp >/dev/null 2>&1; then
-
         printf "\033c"
         echo ""
         echo "MOC Is Not Installed!"
@@ -11,145 +20,84 @@ function moc_test (){
         echo "MOC Is An Amazing Console Audio Player!"
         echo "Please Install MOC Using Your Package-manager!"
         echo ""
-
         exit_moc_lyrics
-
     else
-
         moc_check
-
     fi
-
 }
 
-function exit_moc_lyrics (){
-
+exit_moc_lyrics() {
     WORK_DIRECTORY="/tmp/moc_lyrics/"
-
-    if [ -d "$WORK_DIRECTORY" ]; then
-
+    if [[ -d $WORK_DIRECTORY ]]; then
         rm -r "$WORK_DIRECTORY"
-
     fi
-
     exit
 
 }
 
-function moc_check (){
-
+moc_check() {
     MOCSTATE=$(pgrep mocp)
-
-    if [[ -z "$MOCSTATE" ]]; then
-
+    if [[ -z $MOCSTATE ]]; then
         printf "\033c"
         echo ""
         echo "MOC Is Not Running!"
         echo "To Start MOC, type \"mocp\" In Your Terminal!"
         echo ""
-
         exit_moc_lyrics
-
     else
-
         moc_status
-
     fi
-
 }
 
-function moc_status (){
-
+moc_status() {
     MO_ST=$(mocp -i 2>/dev/null | grep "STOP")
-
-    if [[ -n "$MO_ST" ]]; then
-
+    if [[ -n $MO_ST ]]; then
         printf "\033c"
         echo ""
         echo "MOC Is Not Playing Anything!"
         echo ""
-
         exit_moc_lyrics
-
     else
-
-        perl_check
-
-    fi
-
-}
-
-function perl_check (){
-
-    if ! type perl >/dev/null 2>&1; then
-
-        printf "\033c"
-        echo ""
-        echo "Perl Is Not Installed!"
-        echo ""
-        echo "Perl Is A Required Dependency!"
-        echo "Please Install Perl Using Your Package-manager!"
-        echo ""
-
-        exit_moc_lyrics
-
-    fi
-
-    perl -MURI::Escape -e 'print "$URI::Escape::VERSION\n";' &> /dev/null
-
-    RETVAL=$?
-
-    if [ "$RETVAL" -ne 0 ]; then
-
-        printf "\033c"
-        echo ""
-        echo "Perl Module \"URI::Escape\" Is Not Installed!"
-        echo ""
-        echo "Module \"URI::Escape\" Is A Required Dependency!"
-        echo "Please Open The Following Link For More Info,"
-        echo ""
-        echo -e '\e[38;5;82m'"http://stackoverflow.com/q/65865"
-        echo ""
-        tput sgr0
-
-        exit_moc_lyrics
-
-    else
-
+        ### jump to wget_check
         wget_check
-
     fi
-
 }
 
-function wget_check (){
+### bash urlencode, does not work for unicode characters, but these are unlikely to appear in id tags
+urlencode() {
+    local string="${1}"
+    local strlen=${#string}
+    local encoded=""
+    local pos c o
+    for (( pos=0 ; pos<strlen ; pos++ )); do
+        c=${string:$pos:1}
+        case "$c" in
+            [-_.~a-zA-Z0-9]) o="${c}" ;;
+            *)               printf -v o '%%%02x' "'$c"
+        esac
+        encoded+="${o}"
+    done
+    echo "${encoded}"
+}
 
-    if ! type wget >/dev/null 2>&1; then
-
+wget_check() {
+    if ! type wget &>/dev/null; then
         printf "\033c"
         echo ""
         echo "Wget Is Not Installed!"
         echo "Please Install Wget Using Your Package-manager!"
         echo ""
-
         exit_moc_lyrics
-
     else
-
         tag_check
-
     fi
-
 }
 
-function tag_check (){
-
+tag_check() {
+    ARTIST=$(mocp -i | grep 'Artist:' | sed -e 's/^.*: //')
     TITLE=$(mocp -i | grep 'SongTitle:' | sed -e 's/^.*: //')
-
-    if [[ -z "$TITLE" ]]; then
-
+    if [[ -z $TITLE ]]; then
         printf "\033c"
-
         echo ""
         echo "MOC can't get the title field from the file metadata!"
         echo "More information on this subject can be obtained here,"
@@ -157,17 +105,10 @@ function tag_check (){
         echo -e '\e[38;5;82m'"https://en.wikipedia.org/wiki/Tag_editor"
         echo ""
         tput sgr0
-
         exit_moc_lyrics
-
     fi
-
-    ARTIST=$(mocp -i | grep 'Artist:' | sed -e 's/^.*: //')
-
-    if [[ -z "$ARTIST" ]]; then
-
+    if [[ -z $ARTIST ]]; then
         printf "\033c"
-
         echo ""
         echo "MOC can't get the artist field from the file metadata!"
         echo "More information on this subject can be obtained here,"
@@ -175,78 +116,57 @@ function tag_check (){
         echo -e '\e[38;5;82m'"https://en.wikipedia.org/wiki/Tag_editor"
         echo ""
         tput sgr0
-
         exit_moc_lyrics
-
     else
-
         link_check
-
     fi
-
 }
 
-function link_check (){
-
+link_check() {
     if wget --spider --user-agent="Mozilla/5.0 Gecko/20100101" --no-check-certificate --quiet --timeout=30 -q "https://makeitpersonal.co" -O /dev/null; then
-
         get_lyrics
-
     else
-
         printf "\033c"
         echo ""
         echo "Can Not Connect To The Site \"makeitpersonal\"!"
         echo "Make Sure Your Internet Connection Is Active!"
-        echo "If The Problem Persists You Can Report It At,"
-        echo "GitHub Repository Of The Project By Creating,"
-        echo "An Issue There. Here Is The Link To The Repo,"
-        echo ""
-        echo -e '\e[38;5;82m'"https://github.com/hakerdefo/moc-lyrics"
-        echo ""
-        tput sgr0
-        echo "If You Don't Use GitHub You Can Report It By,"
-        echo "Emailing The Author At The Following Address,"
-        echo ""
-        echo -e '\e[38;5;82m'"hakerdefo (at) gmail (dot) com"
-        echo ""
-        tput sgr0
-
         exit_moc_lyrics
-
     fi
-
 }
 
-function get_lyrics (){
-
+get_lyrics() {
     WORK_DIRECTORY="/tmp/moc_lyrics/"
-    test -d "$WORK_DIRECTORY" || mkdir -p "$WORK_DIRECTORY"
     ARTIST1=$(mocp -i | grep 'Artist:' | sed -e 's/^.*: //')
     TITLE1=$(mocp -i | grep 'SongTitle:' | sed -e 's/^.*: //')
-    ARTIST2=$(echo "$ARTIST1" | perl -MURI::Escape -ne 'chomp;print uri_escape($_),"\n"')
-    TITLE2=$(echo "$TITLE1" | perl -MURI::Escape -ne 'chomp;print uri_escape($_),"\n"')
+    ARTIST2=$(urlencode "$ARTIST1")
+    TITLE2=$(urlencode "$TITLE1")
     FILE_HASH=$(echo -n "$TITLE1$ARTIST1" | base32)
     FILE_HASH2=$(echo -n "$FILE_HASH" | sha256sum | awk '{print $1}')
     LYRIC_FILE="$WORK_DIRECTORY/$FILE_HASH2"
 
-    if [ ! -f "$LYRIC_FILE" ]; then
-        
+    [[ -d $WORK_DIRECTORY ]] || mkdir -p "$WORK_DIRECTORY"
+    if [[ ! -f $LYRIC_FILE ]]; then
         wget --user-agent="Mozilla/5.0 Gecko/20100101" --no-check-certificate --quiet --timeout=30 -O "$LYRIC_FILE" "https://makeitpersonal.co/lyrics?artist=$ARTIST2&title=$TITLE2"
-        
         LYRIC_CHECK=$(grep -i "We don't have lyrics for this song yet" "$LYRIC_FILE")
-        
-        if [[ -z "$LYRIC_CHECK" ]]; then
-            
+
+        if [[ -z $LYRIC_CHECK ]]; then
             printf '\n%s\n%s\n' "$TITLE1 - $ARTIST1" "$(cat "$LYRIC_FILE")" >"$LYRIC_FILE"
             printf '\n' >> "$LYRIC_FILE"
-            stty size | perl -ale 'print "-"x$F[1]' >> "$LYRIC_FILE"
+            printf '%.s-' $(seq 1 $(tput cols)) >> "$LYRIC_FILE"
+
+            ### save as moc compatible lyric file
+            MOC_FILE=$(mocp -i | grep 'File:' | sed -e 's/^.*: //' -e 's/.mp3//')
+
+            if [[ ! -f $MOC_FILE ]]; then
+                cp "$LYRIC_FILE" "$MOC_FILE"
+                echo -e "moc lyric file saved as:\n$MOC_FILE"
+            else
+                echo -e "moc lyric file already saved as:\n$MOC_FILE"
+            fi
+
             cat "$LYRIC_FILE"
-            
             moc_check
-            
         else
-            
             echo ""
             echo "$TITLE1 - $ARTIST1"
             echo ""
@@ -255,17 +175,12 @@ function get_lyrics (){
             echo -e '\e[38;5;82m'"https://lyrics.wikia.com"
             echo ""
             tput sgr0
-            stty size | perl -ale 'print "-"x$F[1]'
-            
+            printf '%.s-' $(seq 1 $(tput cols))
             moc_check
-            
         fi
-        
     else
-        
         moc_check
     fi
-
 }
 
 while :
